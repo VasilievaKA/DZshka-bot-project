@@ -1,11 +1,8 @@
 import os
-
-import sqlalchemy
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DB_URL = 'mysql+pymysql://root:12345@127.0.0.1:3306/school'
-engine = create_engine(DB_URL, pool_pre_ping=True)
+engine = create_engine(os.getenv('DB_URL'), pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 session = SessionLocal()
 DataBase = declarative_base()
