@@ -1,8 +1,9 @@
 import os
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker, declarative_base
-
-engine = create_engine('mysql+pymysql://root:12345@127.0.0.1:3306/school', pool_pre_ping=True)
+from dotenv import load_dotenv
+load_dotenv()
+engine = create_engine(os.getenv("URL"), pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 session = SessionLocal()
 DataBase = declarative_base()
@@ -61,6 +62,7 @@ class Topic(DataBase):
 class Homework(DataBase):
     __tablename__ = "homeworks"
     idhomework = Column(Integer, primary_key=True, unique=True)
+    topics = Column(Integer, ForeignKey('topics.idtopic'))
     description = Column(String)
 
     def update_homework(self):
@@ -154,10 +156,33 @@ def update_teacher(name, fname, t_id):
 def add_student(name, fname, sem):
     session.expire_all()
     id_s = session.query(Student.idstudent).count()
-    session.add(Student(idstudent=id_s+1, name=name, fam_name=fname, semestr=sem))
+    session.add(Student(idstudent=id_s + 1, name=name, fam_name=fname, semestr=sem))
     session.commit()
     if get_id(name, fname) is not None:
         return 0
     else:
         return 1
 
+
+def get_topic_id(name):
+    for i in session.query(Topic).filter(Topic.name == name):
+        return i.idtopic
+
+
+def get_homework_id(name):
+    for i in session.query(Homework).filter(Topic.name == name):
+        return i.idtopic
+
+
+def get_homework_id(topic):
+    pass
+
+
+def add_topic(info: list):
+    session.expire_all()
+    id_s = session.query(Topic.idtopic).count()
+    Topic(idtopic=id_s + 1, name=info[0], description=info[1], summary=info[2]).update_topic()
+    if get_topic_id(info[0]):
+        return get_topic_id(info[0])
+    else:
+        return 0

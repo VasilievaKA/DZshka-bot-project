@@ -9,7 +9,6 @@ import database as d
 load_dotenv()
 bot = telebot.TeleBot(os.getenv("TOKEN"))
 
-user = {'name': '', 'fname': ''}
 keyboard_lessons = types.InlineKeyboardMarkup()
 keyboard = types.InlineKeyboardMarkup()
 
@@ -17,7 +16,7 @@ keyboard = types.InlineKeyboardMarkup()
 @bot.message_handler(commands=['start'])
 def start(message):
     if d.get_student(message.from_user.id) is None and d.get_teacher_by_tid(message.from_user.id) is None:
-        bot.send_message(message.from_user.id, "Введи свое имя")
+        bot.send_message(message.from_user.id, "Введи свое имя и фамилию через пробел")
         bot.register_next_step_handler(message, register)
     else:
         if d.get_student(message.from_user.id) is not None:
@@ -27,18 +26,12 @@ def start(message):
 
 
 def register(message):
-    user['name'] = message.text
-    bot.send_message(message.from_user.id, "Введи свою фамилию")
-    bot.register_next_step_handler(message, register_f)
-
-
-def register_f(message):
-    user['fname'] = message.text
-    if d.get_id(user['name'], user['fname']) is not None:
-        d.update_student(user['name'], user['fname'], str(message.chat.id))
+    user = message.text.split(' ')
+    if d.get_id(user[0], user[1]) is not None:
+        d.update_student(user[0], user[1], str(message.chat.id))
         bot.send_message(message.from_user.id, "Регистрация окончена. Проверь уроки /check_lesson")
-    elif d.get_teacher(user['name'], user['fname']) is not None:
-        d.update_teacher(user['name'], user['fname'], str(message.chat.id))
+    elif d.get_teacher(user[0], user[1]) is not None:
+        d.update_teacher(user[0], user[1], str(message.chat.id))
         bot.send_message(message.from_user.id, "Регистрация окончена. Проверь уроки /admin")
     else:
         bot.send_message(message.from_user.id, "Я не нашел тебя в базе")
@@ -94,43 +87,70 @@ def callback_worker(call):
                               message_id=call.message.message_id, reply_markup=make_keyboard_lessons(lis))
 
 
-@bot.message_handler(commands=['admin'])
+@bot.message_handler(commands=['admin'])  # сделать не команды, а клавиатуру
 def send_commands_for_teachers(message):
     bot.send_message(message.from_user.id, '/addStudent - добавить нового ученика\n'
-                                           '/addLesson - добавить домашнее задание и тему урока')
+                                           '/addLesson - добавить домашнее задание и тему урока\n'
+                                           '/checkStudents - проверить пройденные темы у учеников')
 
 
-@bot.message_handler(commands=['addStudent', 'addLesson'])
+@bot.message_handler(commands=['addStudent', 'addLesson', 'checkStudents'])
 def update_lessons(message):
     if message.text == '/addStudent':
-        bot.send_message(message.from_user.id, "Введи имя ученика")
-        bot.register_next_step_handler(message, add_fam_name)
+        bot.send_message(message.from_user.id, "Введи имя, фамилию ученика и номер семестра через пробел")
+        bot.register_next_step_handler(message, add_user)
+    elif message.text == '/addLesson':
+        bot.send_message(message.chat.id, "Введи тему урока")
+        bot.register_next_step_handler(message, find_topic)
     else:
-        bot.send_message(message.from_user.id, "В разработке")
+        bot.send_message(message.chat.id, "В разработке")
 
 
-def add_fam_name(message):
-    user['name'] = message.text
-    bot.send_message(message.from_user.id, "Введи фамилию ученика")
-    bot.register_next_step_handler(message, add_semestr)
-
-
-def add_semestr(message):
-    user['fname'] = message.text
-    bot.send_message(message.from_user.id, "Введи семестр")
-    bot.register_next_step_handler(message, add_user)
+def find_topic(message):
+    if '/' not in message.text:
+        if d.get_topic_id(message.text) is not None:
+            bot.send_message(message.chat.id, "Тема найдена")  # должна быть функция для добавления темы и дз ученику
+        else:
+            bot.send_message(message.from_user.id, "Введи информацию об уроке \n"
+                                                   "Тема урока\n"
+                                                   "Описание урока (что именно прошли)\n"
+                                                   "Описание пройденных функций, методов и т.д\n"
+                                                   "Домашнее задание")
+            bot.register_next_step_handler(message, add_homework)
+    else:
+        update_lessons(message)
 
 
 def add_user(message):
-    try:
-        semestr = int(message.text)
-        if not d.add_student(user['name'], user['fname'], semestr):
-            bot.send_message(message.from_user.id, "Ученик успешно добавлен")
-    except:
-        msg = bot.send_message(message.chat.id, "Что-то пошло не так")
-        time.sleep(1)
-        bot.edit_message_text('Введи имя ученика', chat_id=msg.chat.id, message_id=msg.message_id)
-        bot.register_next_step_handler(msg, add_fam_name)
+    if '/' not in message.text:
+        info = message.text.split(" ")
+        try:
+            semestr = int(info[2])
+            if not d.add_student(info[0], info[1], semestr):
+                bot.send_message(message.from_user.id, "Ученик успешно добавлен")
+        except:
+            bot.send_message(message.from_user.id, "Введи имя, фамилию ученика и номер семестра через пробел")
+            bot.register_next_step_handler(message, add_user)
+    else:
+        update_lessons(message)
+
+
+def add_homework(message):
+    if '/' not in message.text:
+        topic = message.text.split("\n")
+        try:
+            if d.add_topic(topic) != 0:
+                pass
+        except:
+            bot.send_message(message.chat.id, "Что-то пошло не так, попробуй еще раз")
+            time.sleep(1)
+            bot.send_message(message.chat.id, "Введи информацию об уроке \n"
+                                              "Тема урока\n"
+                                              "Описание урока (что именно прошли)\n"
+                                              "Описание пройденных функций, методов и т.д\n"
+                                              "Домашнее задание")
+    else:
+        update_lessons(message)
 
 
 bot.polling(non_stop=True)
