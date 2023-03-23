@@ -12,6 +12,7 @@ bot = telebot.TeleBot(os.getenv("TOKEN"))
 keyboard_lessons = types.InlineKeyboardMarkup()
 keyboard = types.InlineKeyboardMarkup()
 keyboard_admin = types.InlineKeyboardMarkup()
+st_id = 0
 
 
 @bot.message_handler(commands=['start'])
@@ -46,15 +47,21 @@ def register(message):
 @bot.message_handler(commands=['check_lesson'])
 def lessons(message):
     if d.get_student(message.from_user.id) is not None:
-        lis = list(d.get_lessons(message.from_user.id))
+        lis = list(d.get_lessons(t_id=message.from_user.id))
         keyboard_lessons = make_keyboard_lessons(lis)
         bot.send_message(message.from_user.id, text='Выбери урок', reply_markup=keyboard_lessons)
     elif d.get_parent_by_tid(message.from_user.id) is not None:
-        lis = list(d.get_lessons(d.find_student(message.from_user.id)))
+        lis = list(d.get_lessons(t_id=d.find_student(message.from_user.id)))
         keyboard_lessons = make_keyboard_lessons(lis)
         bot.send_message(message.from_user.id, text='Выбери урок', reply_markup=keyboard_lessons)
-    elif d.get_teacher_by_tid(message.from_user.id) is not None:
-        bot.send_message(message.from_user.id, 'Проверь уроки /admin')
+
+
+def lessons_for_teacher(message, info):
+    global st_id
+    lis = list(d.get_lessons(student_id=info[5:len(info)]))
+    keyboard_lessons = make_keyboard_lessons(lis)
+    st_id = info[5:len(info)]
+    bot.send_message(message.chat.id, text='Выбери урок', reply_markup=keyboard_lessons)
 
 
 def make_keyboard_lessons(lis):
@@ -69,10 +76,12 @@ def make_keyboard_lessons(lis):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_worker(call):
     global keyboard
-    lst = d.find_students_by_teacher(call.message.chat.id)  # функция для # формирования списка студентов
     if call.data[:5] == 'номер':
         keyboard = types.InlineKeyboardMarkup()
-        lesson = d.get_lesson(call.data[6:len(call.data)], call.message.chat.id)
+        if d.get_student(call.message.chat.id) is not None or d.get_parent_by_tid(call.message.chat.id) is not None:
+            lesson = d.get_lesson(n=call.data[6:len(call.data)], t_id=call.message.chat.id)
+        else:
+            lesson = d.get_lesson(n=call.data[6:len(call.data)], user=st_id)
         for i in lesson:
             key = types.InlineKeyboardButton(text=f'{i}', callback_data=f'{i} {lesson[i]}')
             keyboard.add(key)
@@ -80,30 +89,41 @@ def callback_worker(call):
         keyboard.add(key)
         bot.edit_message_text(text='Информация с урока', chat_id=call.message.chat.id,
                               message_id=call.message.message_id, reply_markup=keyboard)
-    if call.data[:4] == 'тема':
+    elif call.data[:4] == 'тема':
         topic = d.get_topic(call.data[5:len(call.data)])
         bot.edit_message_text(text=f'Название: {topic["название"]}\nОписание: '
                                    f'{topic["описание"]}\nФункции: {topic["функции"]}',
                               chat_id=call.message.chat.id,
                               message_id=call.message.message_id, reply_markup=keyboard)
-    elif call.data[:16] == 'домашнее задание':
+    elif call.data[:16] == 'домашнее задание':  # исправить для учителя
         topic = d.get_homework(call.data[17:len(call.data)])
         bot.edit_message_text(text=f'Описание: {topic["описание"]}', chat_id=call.message.chat.id,
                               message_id=call.message.message_id, reply_markup=keyboard)
     elif call.data == '>':
-        lis = list(d.get_lessons(call.message.chat.id))
+        if d.get_student(call.message.chat.id) is not None or d.get_parent_by_tid(call.message.chat.id) is not None:
+            lis = list(d.get_lessons(t_id=call.message.chat.id))
+        else:
+            lis = list(d.get_lessons(student_id=st_id))
         lis.sort()
         bot.edit_message_text(text='Выбери урок', chat_id=call.message.chat.id,
                               message_id=call.message.message_id, reply_markup=make_keyboard_lessons(lis))
-    elif int(call.data) in list(lst.keys()):
+    elif call.data[:4] == "урок":
+        update_lessons(call.message, call.data[5:len(call.data)])
+    elif call.data[:4] == "инфо":
+        lessons_for_teacher(call.message, call.data)
+    elif int(call.data) in list(d.find_students_by_teacher(call.message.chat.id).keys()):
+        keyboard_admin = types.InlineKeyboardMarkup()
+        keyboard_admin.add(types.InlineKeyboardButton(text="Добавить информацию об уроке", callback_data=f'урок {int(call.data)}'),
+                           types.InlineKeyboardButton(text="Показать информацию об уроках", callback_data=f'инфо {int(call.data)}'))
+        bot.edit_message_text(text="Выбери действие", chat_id=call.message.chat.id,
+                              message_id=call.message.message_id, reply_markup=keyboard_admin)
 
-        print(list(lst.keys()))  # создать клавиатуру с кнопками: добавить информацию об уроке, вывести все уроки
 
-
-@bot.message_handler(commands=['admin'])  # сделать не команды, а клавиатуру
+@bot.message_handler(commands=['admin'])
 def send_commands_for_teachers(message):
-    lst = d.find_students_by_teacher(message.chat.id) # функция для # формирования списка студентов
+    lst = d.find_students_by_teacher(message.chat.id)
     bt_lst = []
+    keyboard_admin = types.InlineKeyboardMarkup()
     for i in range(1, len(lst) + 1, 3):
         for j in range(i, i + 3):
             try:
@@ -122,46 +142,36 @@ def send_commands_for_teachers(message):
     bot.send_message(message.chat.id, "Список твоих учеников", reply_markup=keyboard_admin)
 
 
-@bot.message_handler(commands=['addStudent', 'addLesson', 'checkStudents'])
-def update_lessons(message):
-    if message.text == '/addLesson':
-        bot.send_message(message.chat.id, "Введи тему урока")
-        bot.register_next_step_handler(message, find_topic)
+def update_lessons(message, student):
+    bot.send_message(message.chat.id, "Введи тему урока")
+    bot.register_next_step_handler(message, find_topic, student)
+
+
+def find_topic(message, student):
+    if d.get_topic_id(message.text, student) != 0:
+        bot.send_message(message.chat.id, f"Такая тема уже есть\nВот ее номер {d.get_topic_id(message.text, student)}")
     else:
-        bot.send_message(message.chat.id, "В разработке")
+        bot.send_message(message.from_user.id, "Введи информацию об уроке \n"
+                                               "Тема урока\n"
+                                               "Описание урока (что именно прошли)\n"
+                                               "Описание пройденных функций, методов и т.д\n"
+                                               "Домашнее задание")
+        bot.register_next_step_handler(message, add_homework, student)
 
 
-def find_topic(message):
-    if '/' not in message.text:
-        if d.get_topic_id(message.text) is not None:
-            bot.send_message(message.chat.id, "Тема найдена")  # должна быть функция для добавления темы и дз ученику
-        else:
-            bot.send_message(message.from_user.id, "Введи информацию об уроке \n"
-                                                   "Тема урока\n"
-                                                   "Описание урока (что именно прошли)\n"
-                                                   "Описание пройденных функций, методов и т.д\n"
-                                                   "Домашнее задание")
-            bot.register_next_step_handler(message, add_homework)
-    else:
-        update_lessons(message)
-
-
-def add_homework(message):
-    if '/' not in message.text:
-        topic = message.text.split("\n")
-        try:
-            if d.add_topic(topic) != 0:
-                bot.send_message(message.chat.id, "Урок успешно добавлен")  # передача id студента, запись в Lesson
-        except:
-            bot.send_message(message.chat.id, "Что-то пошло не так, попробуй еще раз")
-            time.sleep(1)
-            bot.send_message(message.chat.id, "Введи информацию об уроке \n"
-                                              "Тема урока\n"
-                                              "Описание урока (что именно прошли)\n"
-                                              "Описание пройденных функций, методов и т.д\n"
-                                              "Домашнее задание")
-    else:
-        update_lessons(message)
+def add_homework(message, student):
+    topic = message.text.split("\n")
+    try:
+        if d.add_homework(topic, student) != 0:
+            bot.send_message(message.chat.id, "Урок успешно добавлен")  # передача id студента, запись в Lesson
+    except:
+        bot.send_message(message.chat.id, "Что-то пошло не так, попробуй еще раз")
+        time.sleep(1)
+        bot.send_message(message.chat.id, "Введи информацию об уроке \n"
+                                          "Тема урока\n"
+                                          "Описание урока (что именно прошли)\n"
+                                          "Описание пройденных функций, методов и т.д\n"
+                                          "Домашнее задание")
 
 
 bot.polling(non_stop=True)

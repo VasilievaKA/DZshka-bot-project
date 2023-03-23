@@ -101,11 +101,6 @@ def get_id(name, fname):
         return i.idstudent
 
 
-def get_id_by_tid(t_id):
-    for i in SessionLocal().query(Student).filter(Student.id == t_id):
-        return i.idstudent
-
-
 def get_student(t_id):
     for i in SessionLocal().query(Student).filter(Student.id == t_id):
         return i.idstudent
@@ -121,17 +116,22 @@ def get_homework(id_homework):
         return {'описание': i.homework}
 
 
-def get_lesson(n, t_id):
-    id_user = get_id_by_tid(t_id)
+def get_lesson(n, t_id=None, user=None):
+    if t_id is not None:
+        id_user = get_student(t_id)
+    else:
+        id_user = user
     q = SessionLocal().query(Lesson.lesson).filter(Lesson.lesson_num == n, Lesson.student == id_user)
-    print(q)
     n = SessionLocal().query(Topic).filter(Topic.idtopic == q)
     for i in n:
         return {'тема': i.idtopic, 'домашнее задание': i.idtopic}
 
 
-def get_lessons(t_id):
-    id_user = get_id_by_tid(t_id)
+def get_lessons(t_id=None, student_id=None):
+    if t_id is not None:
+        id_user = get_student(t_id)
+    else:
+        id_user = student_id
     return SessionLocal().query(Lesson.lesson_num).filter(Lesson.student == id_user).all()
 
 
@@ -173,17 +173,6 @@ def update_teacher(name, fname, t_id):
     session.commit()
 
 
-# def add_student(name, fname, sem):
-#     session.expire_all()
-#     id_s = session.query(Student.idstudent).count()
-#     session.add(Student(idstudent=id_s + 1, name=name, fam_name=fname, semestr=sem))
-#     session.commit()
-#     if get_id(name, fname) is not None:
-#         return 0
-#     else:
-#         return 1
-
-
 def find_student(t_id):
     for i in session.query(Student).filter(Student.parent == get_parent_by_tid(t_id)):
         return i.id
@@ -195,9 +184,13 @@ def find_students_by_teacher(t_id):
         users[i.idstudent] = str(i.name) + ' ' + str(i.fam_name)
     return users
 
-def get_topic_id(name):
-    for i in session.query(Topic).filter(Topic.name == name):
-        return i.idtopic
+
+def get_topic_id(name, student_id):
+    for i in session.query(Lesson).filter(Lesson.student == student_id):
+        for j in session.query(Topic).filter(Topic.idtopic == i.lesson):
+            if name == j.name:
+                return j.idtopic
+    return 0
 
 
 def get_homework_id(name):
@@ -205,11 +198,14 @@ def get_homework_id(name):
         return i.idtopic
 
 
-def add_topic(info: list):
+def add_homework(info: list, student_id):
     session.expire_all()
     id_s = session.query(Topic.idtopic).count()
+    lessons_id = session.query(Lesson.idlesson).count()
+    lesson_num = session.query(Lesson.lesson_num).filter(Lesson.student == student_id).order_by(Lesson.lesson_num.desc()).first()
     Topic(idtopic=id_s + 1, name=info[0], description=info[1], summary=info[2], homework=info[3]).update_topic()
-    if get_topic_id(info[0]):
-        return get_topic_id(info[0])
+    Lesson(idlesson=lessons_id+1, student=student_id, lesson_num=lesson_num, lesson=id_s+1).update_lesson()
+    if get_topic_id(info[0], student_id):
+        return get_topic_id(info[0], student_id)
     else:
         return 0
