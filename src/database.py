@@ -16,6 +16,8 @@ class Student(DataBase):
     fam_name = Column(String(20))
     semestr = Column(Integer)
     id = Column(String(20), unique=True)
+    teacher = Column(Integer, ForeignKey('teachers.idteacher'))
+    parent = Column(Integer, ForeignKey('parents.idparent'))
 
     def update_student(self):
         session.add(self)
@@ -31,7 +33,6 @@ class Teacher(DataBase):
     idteacher = Column(Integer, primary_key=True, unique=True)
     name = Column(String(45))
     fname = Column(String(45))
-    code = Column(String(45), unique=True)
     t_id = Column(String(20), unique=True)
 
     def update_teacher(self):
@@ -43,12 +44,29 @@ class Teacher(DataBase):
         session.commit()
 
 
+class Parent(DataBase):
+    __tablename__ = "parents"
+    idparent = Column(Integer, primary_key=True, unique=True)
+    name = Column(String(45))
+    fname = Column(String(45))
+    t_id = Column(String(20), unique=True)
+
+    def update_parent(self):
+        session.add(self)
+        session.commit()
+
+    def delete_parent(self):
+        session.delete(self)
+        session.commit()
+
+
 class Topic(DataBase):
     __tablename__ = "topics"
     idtopic = Column(Integer, primary_key=True, unique=True)
     name = Column(String(200))
     description = Column(Text)
     summary = Column(Text)
+    homework = Column(String(200))
 
     def update_topic(self):
         session.add(self)
@@ -59,27 +77,11 @@ class Topic(DataBase):
         session.commit()
 
 
-class Homework(DataBase):
-    __tablename__ = "homeworks"
-    idhomework = Column(Integer, primary_key=True, unique=True)
-    topics = Column(Integer, ForeignKey('topics.idtopic'))
-    description = Column(String)
-
-    def update_homework(self):
-        session.add(self)
-        session.commit()
-
-    def delete_homework(self):
-        session.delete(self)
-        session.commit()
-
-
 class Lesson(DataBase):
     __tablename__ = "lessons"
     idlesson = Column(Integer, primary_key=True)
     student = Column(Integer, ForeignKey('students.idstudent'))
-    topic = Column(Integer, ForeignKey('topics.idtopic'))
-    homework = Column(Integer, ForeignKey('homeworks.idhomework'))
+    lesson = Column(Integer, ForeignKey('topics.idtopic'))
     lesson_num = Column(Integer)
 
     def update_lesson(self):
@@ -115,15 +117,17 @@ def get_topic(id_topic):
 
 
 def get_homework(id_homework):
-    for i in SessionLocal().query(Homework).filter(Homework.idhomework == id_homework):
-        return {'описание': i.description}
+    for i in SessionLocal().query(Topic).filter(Topic.idtopic == id_homework):
+        return {'описание': i.homework}
 
 
 def get_lesson(n, t_id):
     id_user = get_id_by_tid(t_id)
-    q = SessionLocal().query(Lesson).filter(Lesson.lesson_num == n, Lesson.student == id_user)
-    for i in q:
-        return {'тема': i.topic, 'домашнее задание': i.homework}
+    q = SessionLocal().query(Lesson.lesson).filter(Lesson.lesson_num == n, Lesson.student == id_user)
+    print(q)
+    n = SessionLocal().query(Topic).filter(Topic.idtopic == q)
+    for i in n:
+        return {'тема': i.idtopic, 'домашнее задание': i.idtopic}
 
 
 def get_lessons(t_id):
@@ -142,6 +146,22 @@ def get_teacher(name, fname):
         return i.idteacher
 
 
+def get_parent(name, fname):
+    for i in SessionLocal().query(Parent).filter(Parent.name == name, Parent.fname == fname):
+        return i.idparent
+
+
+def update_parent(name, fname, t_id):
+    user = session.query(Parent).get(get_parent(name, fname))
+    user.t_id = t_id
+    session.commit()
+
+
+def get_parent_by_tid(t_id):
+    for i in SessionLocal().query(Parent).filter(Parent.t_id == t_id):
+        return i.idparent
+
+
 def get_teacher_by_tid(t_id):
     for i in SessionLocal().query(Teacher).filter(Teacher.t_id == t_id):
         return i.idteacher
@@ -153,16 +173,27 @@ def update_teacher(name, fname, t_id):
     session.commit()
 
 
-def add_student(name, fname, sem):
-    session.expire_all()
-    id_s = session.query(Student.idstudent).count()
-    session.add(Student(idstudent=id_s + 1, name=name, fam_name=fname, semestr=sem))
-    session.commit()
-    if get_id(name, fname) is not None:
-        return 0
-    else:
-        return 1
+# def add_student(name, fname, sem):
+#     session.expire_all()
+#     id_s = session.query(Student.idstudent).count()
+#     session.add(Student(idstudent=id_s + 1, name=name, fam_name=fname, semestr=sem))
+#     session.commit()
+#     if get_id(name, fname) is not None:
+#         return 0
+#     else:
+#         return 1
 
+
+def find_student(t_id):
+    for i in session.query(Student).filter(Student.parent == get_parent_by_tid(t_id)):
+        return i.id
+
+
+def find_students_by_teacher(t_id):
+    users = {}
+    for i in SessionLocal().query(Student).filter(Student.teacher == get_teacher_by_tid(t_id)).all():
+        users[i.idstudent] = str(i.name) + ' ' + str(i.fam_name)
+    return users
 
 def get_topic_id(name):
     for i in session.query(Topic).filter(Topic.name == name):
@@ -170,18 +201,14 @@ def get_topic_id(name):
 
 
 def get_homework_id(name):
-    for i in session.query(Homework).filter(Topic.name == name):
+    for i in session.query(Topic).filter(Topic.name == name):
         return i.idtopic
-
-
-def get_homework_id(topic):
-    pass
 
 
 def add_topic(info: list):
     session.expire_all()
     id_s = session.query(Topic.idtopic).count()
-    Topic(idtopic=id_s + 1, name=info[0], description=info[1], summary=info[2]).update_topic()
+    Topic(idtopic=id_s + 1, name=info[0], description=info[1], summary=info[2], homework=info[3]).update_topic()
     if get_topic_id(info[0]):
         return get_topic_id(info[0])
     else:
