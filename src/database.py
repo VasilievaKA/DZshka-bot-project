@@ -1,7 +1,10 @@
 import os
+import time
+
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
+
 load_dotenv()
 engine = create_engine(os.getenv("URL"), pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -66,7 +69,7 @@ class Topic(DataBase):
     name = Column(String(200))
     description = Column(Text)
     summary = Column(Text)
-    homework = Column(String(200))
+    homework = Column(String(1000))
 
     def update_topic(self):
         session.add(self)
@@ -104,6 +107,10 @@ def get_id(name, fname):
 def get_student(t_id):
     for i in SessionLocal().query(Student).filter(Student.id == t_id):
         return i.idstudent
+
+def get_student_name(t_id):
+    for i in SessionLocal().query(Student).filter(Student.id == t_id):
+        return i.name, i.fam_name
 
 
 def get_topic(id_topic):
@@ -200,12 +207,19 @@ def get_homework_id(name):
 
 def add_homework(info: list, student_id):
     session.expire_all()
-    id_s = session.query(Topic.idtopic).count()
-    lessons_id = session.query(Lesson.idlesson).count()
-    lesson_num = session.query(Lesson.lesson_num).filter(Lesson.student == student_id).order_by(Lesson.lesson_num.desc()).first()
-    Topic(idtopic=id_s + 1, name=info[0], description=info[1], summary=info[2], homework=info[3]).update_topic()
-    Lesson(idlesson=lessons_id+1, student=student_id, lesson_num=lesson_num, lesson=id_s+1).update_lesson()
+    id_s = session.query(Topic.idtopic).count() + 1
+    lessons_id = session.query(Lesson.idlesson).count() + 1
+    lesson_num = session.query(Lesson.lesson_num).filter(Lesson.student == student_id). \
+                     order_by(Lesson.lesson_num.desc()).first()[0] + 1
+    Topic(idtopic=id_s, name=info[0], description=info[1], summary=info[2], homework=info[3]).update_topic()
+    Lesson(idlesson=lessons_id, student=student_id, lesson=id_s, lesson_num=lesson_num).update_lesson()
     if get_topic_id(info[0], student_id):
         return get_topic_id(info[0], student_id)
     else:
         return 0
+
+
+def get_teacher_by_student(t_id):
+    id_t = session.query(Student.teacher).filter(Student.id == t_id)
+    for i in session.query(Teacher).filter(Teacher.idteacher == id_t):
+        return i.t_id
