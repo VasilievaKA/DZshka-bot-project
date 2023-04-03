@@ -89,7 +89,7 @@ def lessons_for_teacher(message, info):
 
 def make_keyboard_lessons(lis: list, move=None):
     """! Make keyboard for students and their parents.
-    @param list   Numbers of students' lessons.
+    @param lis   Numbers of students' lessons.
     @param move   Flag for making keyboard for teacher
     """
     lis.sort()
