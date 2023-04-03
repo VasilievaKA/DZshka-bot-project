@@ -1,22 +1,35 @@
+"""! @brief Main logic of telegram bot work"""
+##
+# @mainpage Telegram Bot for teachers.
+#
+# Copyright (c) 2023 MIREA Team.  All rights reserved.
+##
+# @file main.py
+#
+# @section author_doxygen_example Author(s)
+# - Created by MIREA Team on 02/04/2023.
+#
+# Copyright (c) 2023 MIREA Team.  All rights reserved.
+# Imports
 import time
-
 from telebot import types
 from dotenv import load_dotenv
 import os
 import telebot
 import database as d
 
+# Global Constants
 load_dotenv()
 bot = telebot.TeleBot(os.getenv("TOKEN"))
-
-# keyboard_lessons = types.InlineKeyboardMarkup()
 keyboard = types.InlineKeyboardMarkup()
-# keyboard_admin = types.InlineKeyboardMarkup()
 st_id = 0
 
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    """! Send instructions to sender.
+    @param message   The input message from chat.
+    """
     if d.get_student(message.from_user.id) is None and d.get_teacher_by_tid(message.from_user.id) is None \
             and d.get_parent_by_tid(message.from_user.id) is None:
         bot.send_message(message.from_user.id, "Введи свое имя и фамилию через пробел")
@@ -29,6 +42,9 @@ def start(message):
 
 
 def register(message):
+    """! Update telegram id and send instructions to sender.
+    @param message   The input message from chat.
+    """
     user = message.text.split(' ')
     if d.get_id(user[0], user[1]) is not None:
         d.update_student(user[0], user[1], str(message.chat.id))
@@ -46,6 +62,9 @@ def register(message):
 
 @bot.message_handler(commands=['check_lesson'])
 def lessons(message):
+    """! Make list with lessons' numbers and send keyboard to sender.
+    @param message   The input message from chat.
+    """
     if d.get_student(message.from_user.id) is not None:
         lis = list(d.get_lessons(t_id=message.from_user.id))
     elif d.get_parent_by_tid(message.from_user.id) is not None:
@@ -56,14 +75,23 @@ def lessons(message):
 
 
 def lessons_for_teacher(message, info):
+    """! Make list with lessons' numbers of a certain student and send keyboard to sender.
+    @param message   The input message from chat.
+    @param info   Information about sender.
+    """
     global st_id
     lis = list(d.get_lessons(student_id=info[5:len(info)]))
     keyboard = make_keyboard_lessons(lis, move=1)
     st_id = info[5:len(info)]
-    bot.edit_message_text(text='Выбери урок', chat_id=message.chat.id, message_id=message.message_id, reply_markup=keyboard)
+    bot.edit_message_text(text='Выбери урок', chat_id=message.chat.id, message_id=message.message_id,
+                          reply_markup=keyboard)
 
 
 def make_keyboard_lessons(lis: list, move=None):
+    """! Make keyboard for students and their parents.
+    @param list   Numbers of students' lessons.
+    @param move   Flag for making keyboard for teacher
+    """
     lis.sort()
     keyboard_l = types.InlineKeyboardMarkup()
     for i in lis:
@@ -75,6 +103,9 @@ def make_keyboard_lessons(lis: list, move=None):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_worker(call):
+    """! Processing of pushing buttons.
+    @param call   Information about sender, message, message data.
+    """
     global keyboard
     if call.data[:5] == 'номер':
         keyboard = types.InlineKeyboardMarkup()
@@ -115,8 +146,9 @@ def callback_worker(call):
         lessons_for_teacher(call.message, call.data)
     elif call.data in list(str(d.find_students_by_teacher(call.message.chat.id).keys())):
         keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton(text="Добавить информацию об уроке", callback_data=f'урок {int(call.data)}'),
-                     types.InlineKeyboardButton(text="Показать информацию об уроках", callback_data=f'инфо {int(call.data)}'))
+        keyboard.add(
+            types.InlineKeyboardButton(text="Добавить информацию об уроке", callback_data=f'урок {int(call.data)}'),
+            types.InlineKeyboardButton(text="Показать информацию об уроках", callback_data=f'инфо {int(call.data)}'))
         bot.edit_message_text(text="Выбери действие", chat_id=call.message.chat.id,
                               message_id=call.message.message_id, reply_markup=keyboard)
     elif call.data == "<":
@@ -126,8 +158,13 @@ def callback_worker(call):
             types.InlineKeyboardButton(text="Показать информацию об уроках", callback_data=f'инфо {st_id}'))
         bot.edit_message_text(text="Выбери действие", chat_id=call.message.chat.id,
                               message_id=call.message.message_id, reply_markup=keyboard)
+
+
 @bot.message_handler(commands=['admin'])
 def send_commands_for_teachers(message):
+    """! Make keyboard with students for certain teacher, only for admins.
+    @param message   Information about sender and message.
+    """
     lst = d.find_students_by_teacher(message.chat.id)
     bt_lst = []
     keyboard = types.InlineKeyboardMarkup()
@@ -150,11 +187,19 @@ def send_commands_for_teachers(message):
 
 
 def update_lessons(message, student):
+    """! Send instuctions for teacher.
+    @param message   Information about sender and message.
+    @param student   Students' telegram id.
+    """
     bot.send_message(message.chat.id, "Введи тему урока")
     bot.register_next_step_handler(message, find_topic, student)
 
 
 def find_topic(message, student):
+    """! Find certain topic and send instructions, how to update information about lesson.
+    @param message   Information about sender and message.
+    @param student   Students' telegram id.
+    """
     if d.get_topic_id(message.text, student) != 0:
         bot.send_message(message.chat.id, f"Такая тема уже есть\nВот ее номер {d.get_topic_id(message.text, student)}")
     else:
@@ -167,6 +212,10 @@ def find_topic(message, student):
 
 
 def add_homework(message, student):
+    """!Update student's information about lesson.
+    @param message   Information about sender and message.
+    @param student   Students' telegram id.
+    """
     topic = message.text.split("\n")
     if d.add_homework(topic, student) != 0:
         bot.send_message(message.chat.id, "Урок успешно добавлен")  # передача id студента, запись в Lesson
@@ -182,6 +231,9 @@ def add_homework(message, student):
 
 @bot.message_handler(content_types=['document'])
 def send_doc(message):
+    """!Get files with python scripts from student and send them to teacher.
+    @param message   Information about sender and message.
+    """
     id_doc = message.document.file_id
     print(id_doc)
     if ".py" in bot.get_file(id_doc).file_path:

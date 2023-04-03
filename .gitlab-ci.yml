@@ -1,0 +1,15 @@
+stages:
+  - build
+  - deploy
+
+build:
+  before_script:
+    - sudo apt-get update
+    - sudo apt -y install python3-pip
+    - sudo apt-get install mysql-server
+    - sudo apt-get install libmysqlclient-dev
+    - pip install -r requirements.txt
+    - TOKEN="5605342297:AAGB8vlEDobreyOp9_Ual7KDZnErGenrGLo"
+    - URL="mysql+pymysql://root:12345@127.0.0.1:3306/school"
+  script:
+    -
