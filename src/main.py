@@ -36,7 +36,8 @@ def start(message):
         bot.register_next_step_handler(message, register)
     else:
         if d.get_student(message.from_user.id) is not None or d.get_parent_by_tid(message.from_user.id) is not None:
-            bot.send_message(message.from_user.id, "Проверь уроки /check_lesson")
+            bot.send_message(message.from_user.id, "Можешь проверить уроки /check_lesson\n"
+                                                   "Для отправки дз просто отправь файл с расширением .py")
         elif d.get_teacher_by_tid(message.from_user.id) is not None:
             bot.send_message(message.from_user.id, "Проверь уроки /admin")
 
@@ -69,7 +70,6 @@ def lessons(message):
         lis = list(d.get_lessons(t_id=message.from_user.id))
     elif d.get_parent_by_tid(message.from_user.id) is not None:
         lis = list(d.get_lessons(t_id=d.find_student(message.from_user.id)))
-
     keyboard = make_keyboard_lessons(lis)
     bot.send_message(message.from_user.id, text='Выбери урок', reply_markup=keyboard)
 
