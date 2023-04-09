@@ -30,7 +30,7 @@ DataBase = declarative_base()
 
 class Student(DataBase):
     """! Class for information about students.
-    Defines atributes which are using in project.
+    Defines attributes which are using in project.
     """
     __tablename__ = "students"
     idstudent = Column(Integer, primary_key=True, unique=True)

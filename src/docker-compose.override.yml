@@ -1,0 +1,33 @@
+version: '3.9'
+services:
+  bot:
+    build: .
+    command: bash -c "python main.py"
+    environment:
+      URL: 'mysql+pymysql://root:12345@host.docker.internal:3306/school'
+      HOST: 127.0.0.1
+      USER_NAME: 'root'
+      USER_PASSWORD: 12345
+      DEBUG: 1
+    depends_on:
+      - database
+    links:
+      - database
+    restart: on-failure
+  database:
+    image: mysql:latest
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345
+      MYSQL_DATABASE: school
+    volumes:
+      - school:/var/lib/mysql:rw
+  adminer:
+    image: adminer
+    ports:
+      - 8080:8080
+    restart: always
+    environment:
+      ADMINER_DESIGN: 'hydra'
+volumes:
+  school: {}

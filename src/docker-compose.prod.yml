@@ -1,0 +1,10 @@
+version: '3.9'
+services:
+  bot:
+    command: bash -c "python main.py"
+    environment:
+      URL: ${URL?Please provide URL for connection to database}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      USER_PASSWORD: ${USER_PASSWORD}
+      USER_NAME: ${USER_NAME}
+      DEBUG: 0
