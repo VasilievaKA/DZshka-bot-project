@@ -30,7 +30,7 @@ DataBase = declarative_base()
 
 class Student(DataBase):
     """! Class for information about students.
-    Defines attributes which are using in project.
+    Define attributes which are using in project.
     """
     __tablename__ = "students"
     idstudent = Column(Integer, primary_key=True, unique=True)
@@ -75,6 +75,10 @@ class Topic(DataBase):
     summary = Column(Text)
     homework = Column(String(1000))
 
+    def update_topic(self):
+        session.add(self)
+        session.commit()
+
 
 class Lesson(DataBase):
     """! Class for information about lessons.
@@ -84,7 +88,12 @@ class Lesson(DataBase):
     idlesson = Column(Integer, primary_key=True)
     student = Column(Integer, ForeignKey('students.idstudent'))
     lesson = Column(Integer, ForeignKey('topics.idtopic'))
+    mark = Column(Integer, default=0)
     lesson_num = Column(Integer)
+
+    def update_lesson(self):
+        session.add(self)
+        session.commit()
 
 
 DataBase.metadata.create_all(engine)
@@ -115,6 +124,11 @@ def get_student_name(t_id):
         return i.name, i.fam_name
 
 
+def get_student_tid_by_id(idstudent):
+    for i in SessionLocal().query(Student).filter(Student.idstudent == idstudent):
+        return i.id
+
+
 def get_topic(id_topic):
     """! Find topic in database by its id and return its name, description and summary.
     @param id_topic   Topics' id.
@@ -127,8 +141,12 @@ def get_homework(id_homework):
     """! Find topic in database by its id and return homework.
     @param id_homework   Topics' id.
     """
+    topic = SessionLocal().query(Topic.idtopic).filter(Topic.idtopic == id_homework)
+    mark = SessionLocal().query(Lesson.mark).filter(Lesson.lesson == topic)[0][0]
+    hw = {'оценка': mark}
     for i in SessionLocal().query(Topic).filter(Topic.idtopic == id_homework):
-        return {'описание': i.homework}
+        hw['описание'] = i.homework
+    return hw
 
 
 def get_lesson(n, t_id=None, user=None):
@@ -234,6 +252,14 @@ def find_student(t_id):
         return i.id
 
 
+def find_student_by_teacher(t_id):
+    """! Find student in database by his parent id and return his telegram id.
+    @param t_id   Parents' telegram id.
+    """
+    for i in session.query(Student).filter(Student.teacher == get_teacher_by_tid(t_id)):
+        return i.id
+
+
 def find_students_by_teacher(t_id):
     """! Find student in database by his teacher id and return dictionary of students.
     @param t_id   Teachers' telegram id.
@@ -272,14 +298,24 @@ def add_homework(info: list, student_id):
     session.expire_all()
     id_s = session.query(Topic.idtopic).count() + 1
     lessons_id = session.query(Lesson.idlesson).count() + 1
-    lesson_num = session.query(Lesson.lesson_num).filter(Lesson.student == student_id). \
-                     order_by(Lesson.lesson_num.desc()).first()[0] + 1
+    try:
+        lesson_num = session.query(Lesson.lesson_num).filter(Lesson.student == student_id).order_by(Lesson.lesson_num.desc()).first()[0] + 1
+    except:
+        lesson_num = 1
     Topic(idtopic=id_s, name=info[0], description=info[1], summary=info[2], homework=info[3]).update_topic()
     Lesson(idlesson=lessons_id, student=student_id, lesson=id_s, lesson_num=lesson_num).update_lesson()
     if get_topic_id(info[0], student_id):
         return get_topic_id(info[0], student_id)
     else:
         return 0
+
+
+def update_mark(mark, t_id):
+    student = SessionLocal().query(Student.idstudent).filter(Student.id == t_id)
+    lessonid = SessionLocal().query(Lesson.idlesson).filter(Lesson.student == student).order_by(Lesson.lesson_num.desc()).first()[0]
+    lesson = session.query(Lesson).get(lessonid)
+    lesson.mark = mark
+    session.commit()
 
 
 def get_teacher_by_student(t_id):
